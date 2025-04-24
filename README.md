@@ -5,4 +5,5 @@ coding standards, architectural guidelines, and conventions for ezeX platform de
 
 ## Table of Contents
 
-- [Configuration Management](./docs/)
+- [Configuration Management](./docs/configs.md)
+- [Hexagonal Architecture Guideline](./docs/hexagonal_architecture.md)

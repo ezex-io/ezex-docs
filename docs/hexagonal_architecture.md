@@ -6,99 +6,167 @@ As we know, hexagonal architecture centers on **a clean separation** between _bu
 
 ### **1. Domain (Application Core)**
 
-- This is the heart of an application, containing all business rules, domain models, and logic.
-- The domain is completely independent of external technologies and frameworks, ensuring that business logic does not depend on infrastructure details.
+**The domain** is the heart of an application, containing all business rules, domain models, and logic.
+
+💡 Domains should be completely independent of external technologies and frameworks, ensuring that business logic does not depend on infrastructure details.
 
 ### **2. Ports**
 
-- **Ports** are interfaces (for e.g. in Rust, typically defined as traits) that specify how the domain interacts with the outside world.
-- There are two main types:
-  - **Incoming Ports**: Define how external actors (like APIs, CLI, or services) can interact with the domain (e.g., use cases, commands, queries).
-  - **Outgoing Ports**: Define how the domain depends on external resources (e.g., repositories, external services).
+**Ports** are interfaces that specify how the domain interacts with the outside world.
+
+They define the external actors and resources in a general, technology-agnostic way.  
+
+Ports can be **incoming**, **outgoing**, or even **bi-directional**.
+
+Examples of ports include:
+
+* `ServicePort`
+* `CachePort`
+* `RepositoryPort`
+* `EventPort`
+
+💡 Ports should be designed to be _generic_ and _flexible_, **without coupling** to specific technologies.
 
 ### **3. Adapters**
 
-- **Adapters** are concrete implementations of the ports, translating between the domain and external systems.
-- **Incoming Adapters**: Implement incoming ports, handling inputs from the outside (for e.g., HTTP handlers, CLI interfaces).
-- **Outgoing Adapters**: Implement outgoing ports, connecting to databases, messaging systems, or other services.
+**Adapters** are concrete implementations of the ports.
 
-### **4. Dependency Encapsulation**
+They translate between the domain and external systems.
 
-- All third-party dependencies (like databases, frameworks, or external APIs) are encapsulated within adapters.
-- The domain layer never directly interacts with these dependencies, promoting testability and flexibility.
+Examples:
 
-### **5. Error Handling**
+* `CLI` and `gRPC` implements `ServicePort`
+* `RedisAdapter` implements `CachePort`
+* `PostgresAdapter` implements `RepositoryPort`
+* `RedisStreamAdapter` implements `EventPort`
 
-- Domain-specific error types are defined and propagated through ports, ensuring that all error scenarios are handled explicitly and safely.
+Prefer to keep adapters free of business logic.
 
-## Example
+Their primary role is to act as bridges, not decision-makers.
 
-Let's take an example on Rust (we should follow the same rules for Go services).
+💡 Adapters may include some basic or sanity checks, but no business logic at all.
 
-| Component           | Rust Component        | Responsibility                                   |
-|---------------------|-----------------------|--------------------------------------------------|
-| Domain              | Structs, Enums, Logic | Business rules, domain models                    |
-| Ports (Traits)      | Traits                | Define contract for interaction                  |
-| Adapters            | Structs implementing traits | Connect domain to external systems         |
-| Dependency Encapsulation | Adapter modules  | Hide third-party details from the domain         |
-| Error Handling      | Custom error types    | Safe, explicit error propagation                 |
+## Advantages
 
-### 📂 Project Structure
+### Dependency Encapsulation
 
-Lets try to apply this architecture to the Withdrawal Management module:
+* All third-party dependencies (like databases, frameworks, or external APIs) are encapsulated within adapters.
+* The domain layer never directly interacts with these dependencies, promoting testability and flexibility.
 
-```bash
-src/
-├── domain/                # Core business logic
-│   ├── model.rs           # Domain models with string amounts and address labels
-│   ├── withdrawal.rs      # Withdrawal domain service
-│   └── error.rs           # Domain-specific errors
-│
-├── port/                  # Interfaces (traits) - All implementation-agnostic
-│   ├── service/           # Incoming request handlers
-│   │   ├── withdrawal.rs  # Withdrawal service interface
-│   │   ├── address.rs     # Address management interface
-│   │   └── mod.rs         # Combined service exports
-│   │
-│   ├── repository/        # Database access - agnostic of database type
-│   │   ├── read.rs        # Read operations
-│   │   ├── write.rs       # Write operations
-│   │   └── mod.rs         # Combined provider
-│   │
-│   ├── messaging/         # Bi-directional messaging - agnostic of message broker
-│   │   ├── consumer.rs    # Message consumption
-│   │   ├── publisher.rs   # Message publishing
-│   │   └── mod.rs         # Combined provider
-│   │
-│   ├── blockchain/        # Blockchain interaction - agnostic of blockchain type
-│   │   ├── query.rs       # Blockchain queries
-│   │   ├── broadcast.rs   # Transaction broadcasting
-│   │   └── mod.rs         # Combined provider
-│   │
-│   └── scheduler/         # Scheduling interfaces - agnostic of scheduler implementation
-│       └── mod.rs
-│
-├── adapter/               # Implementations of ports
-│   ├── service/           # Service implementations
-│   │   ├── grpc/          # gRPC implementation of service interfaces
-│   │   └── rest/          # REST implementation (if needed)
-│   │
-│   ├── repository/
-│   │   └── postgres/      # PostgreSQL implementation
-│   │
-│   ├── messaging/
-│   │   ├── redis/         # Redis implementation
-│   │   └── kafka/         # Kafka implementation (future maybe!)
-│   │
-│   ├── blockchain/
-│   │   ├── pactus/        # Pactus blockchain implementation
-│   │   ├── bitcoin/       # Bitcoin blockchain implementation
-│   │   └── ethereum/      # Ethereum blockchain implementation
-│   │   └── ....           # others
-│   │
-│   └── scheduler/
-│       ├── cron/          # Cron-based scheduler
-│       └── interval/      # Interval-based scheduler
-│
-└── main.rs
+### Error Handling
+
+Domain-specific error types are defined and propagated through ports, ensuring that all error scenarios are handled explicitly and safely.
+
+TODO:
+> both Adapters and Domains can throw errors.
+
+> In Golang like error . Need more RnD here
+
+Here is the current approach's suggestion in Rust:
+
+1. Using `thiserror` for library code
+
+* `thiserror` for defining structured error types is excellent for library code.
+* It provides good type safety and clear error messages
+
+2. Using `anyhow` for Application Code
+
+* For application-level code where errors are primarily reported to users rather than handled programmatically.
+
+3. Standardize Error Conversion Patterns
+
+* Implementing `From` for error conversion is good
+* Consider standardizing how nested errors are wrapped
+
+4. Add Context to Errors
+
+* When converting between error types, add context about what operation was being performed
+* For e.g.: `Err(err).context("Failed to connect to peer")`
+
+5. Error Categorization
+
+* Adding methods to categorize errors (for e.g. `is_peer_not_found()`)
+* Useful categories might include:
+  * Is the error recoverable?
+  * Is it a network error?
+  * Is it a configuration error?
+
+#### Recommendation for Improved Error Source Tracking
+
+1. Add Stack Trace Support
+
+* Use crates like `backtrace` or `error-chain` to capture stack traces.
+* Example implementation:
+
+```rust
+#[derive(Debug, Error)]
+pub enum EnhancedPeerManagerError {
+    #[error("{source}")]
+    PeerNotFound {
+        #[from]
+        source: PeerManagerError,
+        backtrace: Backtrace,
+    },
+    // ...
+}
 ```
+
+2. Consistent Context Addition
+
+* Use the `.context()` method from anyhow or similar to add operation context
+* Example:
+
+```rust
+fn connect_to_peer(&self, peer_id: NodeId) -> Result<(), ConnectivityError> {
+    self.peer_manager.get_peer(peer_id)
+        .context(format!("Failed to get peer {}", peer_id))?;
+    // ...
+}
+```
+
+3. Structured Logging with Error Context
+
+* Enhance logging to include more context about where errors occur
+* Include relevant identifiers, operation names, and component information
+* Example:
+
+```rust
+error!(
+    target: LOG_TARGET,
+    peer_id = %peer_id,
+    operation = "connect_peer",
+    component = "connectivity",
+    "Failed to connect: {}", err
+);
+```
+
+
+4. Error Tracing System
+
+* Implement a tracing system that assigns unique IDs to errors
+* Log these IDs at each point where errors are handled or converted
+* This creates a breadcrumb trail for error propagation
+
+5. Use `anyhow::Error` with `Context` for Application Code
+
+* For application-level code, using `anyhow::Error` which supports context chains
+* Example:
+
+```rust
+use anyhow::{Context, Result};
+
+fn process_command(&mut self) -> Result<()> {
+    self.connect_to_peer(peer_id)
+        .context("Failed during command processing")?;
+    // ...
+}
+```
+
+### Ease of Testing
+
+Testing core functionality in the domain is straightforward since it has no external dependencies.
+Dependency injection makes domain logic easy to test by swapping real dependencies with mocks.
+
+### Reduced Impact of Change
+
+* The domain remains unaffected or minimally affected when external resources are upgraded or replaced.

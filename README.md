@@ -7,3 +7,4 @@ coding standards, architectural guidelines, and conventions for ezeX platform de
 
 - [Configuration Management](./docs/configs.md)
 - [Hexagonal Architecture Guideline](./docs/hexagonal_architecture.md)
+- [Key Management system](./docs/kms.md)
